@@ -1,0 +1,6 @@
+src/
+test/
+tmp/
+.jshintrc
+.travis.yml
+Gruntfile.js

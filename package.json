@@ -1,0 +1,57 @@
+{
+  "name": "fs-filesysteminfo",
+  "version": "0.0.0",
+  "main": "./lib/index.js",
+  "description": "This module wraps the native NodeJS File System (fs) API into a File System Object (FSO) model which facilitates an object-based approach for working with directories and files.",
+  "homepage": "https://github.com/cookch10/node-fs-filesysteminfo",
+  "bugs": "https://github.com/cookch10/node-fs-filesysteminfo/issues",
+  "author": {
+    "name": "Christopher M. Cook",
+    "email": "cookch10@gmail.com",
+    "url": "https://github.com/cookch10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cookch10/node-fs-filesysteminfo"
+  },
+  "license": "MIT",
+  "files": [
+    "./lib/index.js",
+    "./lib/fs-filesysteminfo.js"
+  ],
+  "keywords": [
+    "fs-filesysteminfo",
+    "fs",
+    "file",
+    "file system",
+    "filesystem",
+    "filesystem info",
+    "filesysteminfo",
+    "fileinfo",
+    "fsinfo",
+    "directoryinfo",
+    "directory",
+    "recursive",
+    "walker",
+    "enumerate files",
+    "enumerate directories",
+    "enumerate file system",
+    "file system enumeration"
+  ],
+  "devDependencies": {
+    "grunt-contrib-coffee": "^0.10.1",
+    "grunt-contrib-jshint": "^0.10.0",
+    "grunt-contrib-nodeunit": "^0.3.3",
+    "grunt-contrib-watch": "^0.6.1",
+    "jshint-stylish": "^0.2.0",
+    "load-grunt-tasks": "^0.4.0",
+    "time-grunt": "^0.3.1"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": "*"
+  },
+  "scripts": {
+    "test": "grunt"
+  }
+}
