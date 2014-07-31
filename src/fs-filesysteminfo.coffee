@@ -144,6 +144,8 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 if exists
                     i.value = true
                 else
+                    i.value = false
+                    
                     try
                         parentPath = _path.resolve("#{@fullName}", '..')
                         if not parentPath.equals(@fullName, true)
@@ -164,6 +166,15 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             throw 'Path is null or undefined' if isNullOrUndefined(originalPath) or originalPath.equals('')
             super(originalPath)
             
+            _exists = {name: 'exists', value: false}
+            Object.defineProperty @, '' + _exists.name + '',
+                get: ->
+                    @Refresh(_exists)
+                    _exists.value
+                configurable: true
+                enumerable: true
+            @exists = _exists.value
+            
             _parent = {name: 'parent', value: null}
             Object.defineProperty @, '' + _parent.name + '',
                 get: ->
@@ -175,10 +186,14 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 enumerable: true
             @parent = _parent.value
         
-        Create: (mode) =>
+        CreateSync: (mode) =>
             mode = toOctalInteger(mode)
+            
+            if not @parent.exists then @parent.CreateSync(mode)
+            
             if not @exists
                 success = true
+                
                 try
                     _fs.mkdirSync(@fullName, mode)
                 catch ex
@@ -190,15 +205,36 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                         throw ex if ex
             return
         
-        CreateSubdirectory: (path, mode) =>
+        DeleteSync: (recursive) =>
+            `recursive = (recursive === undefined ? false : typeof recursive === 'boolean' ? recursive : false)`
+            if recursive
+                children = @EnumerateFileSystemInfosSync('', false)
+                if (children.length is 0)
+                    _fs.rmdirSync(@fullName)
+                else
+                    children.forEach (fsinfo) ->
+                        ftype = fsinfo.GetType()
+                        
+                        if ftype is 'FileInfo' or ftype is 'DirectoryInfo'
+                            fsinfo.DeleteSync(recursive)
+                        else
+                            throw 'Unhandled exception for DeleteSync of ' + fsinfo.GetType()
+                    
+                    _fs.rmdirSync(@fullName)
+            else
+                _fs.rmdirSync(@fullName) # this will (and should) throw an exception if the directory is not empty.  To delete a non-empty directory, set recursive equal to true.
+            
+            return
+        
+        CreateSubdirectorySync: (path, mode) =>
             throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
             path = _path.join(@fullName, path)
             mode = toOctalInteger(mode)
             subdirectory = new DirectoryInfo(path)
-            subdirectory.Create(mode) if not subdirectory.exists
+            subdirectory.CreateSync(mode) if not subdirectory.exists
             subdirectory
         
-        EnumerateFileSystemInfos: (fnSearchFilter, searchSubdirectories) =>
+        EnumerateFileSystemInfosSync: (fnSearchFilter, searchSubdirectories) =>
             throw 'Path does not exist and hence cannot be enumerated' if not @exists
             searchSubdirectories ?= false
             if not isFunction(fnSearchFilter) then fnSearchFilter = () -> true
@@ -210,7 +246,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             
             _fileSystemInfosArr = _fs.readdirSync(@fullName)
             
-            _fileSystemInfosArr.forEach((fsname) =>
+            _fileSystemInfosArr.forEach ((fsname) =>
                 if fnSearchFilter(fsname)
                     path = _path.join(@fullName, fsname)
                     fileSystemInfoObj = new exports.FileSystemInfo(path)
@@ -224,7 +260,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             if searchSubdirectories
                 fileSystemInfosArr.forEach (fsinfo) ->
                     if fsinfo.flags.isDirectory
-                        resultsArr = fsinfo.EnumerateFileSystemInfos(fnSearchFilter, searchSubdirectories, resultsArr)
+                        resultsArr = fsinfo.EnumerateFileSystemInfosSync(fnSearchFilter, searchSubdirectories, resultsArr)
                         return
             
             fileSystemInfosArr = fileSystemInfosArr.concat(resultsArr)
@@ -236,6 +272,15 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             throw 'Path is null or undefined' if isNullOrUndefined(originalPath) or originalPath.equals('')
             super(originalPath)
             
+            _exists = {name: 'exists', value: false}
+            Object.defineProperty @, '' + _exists.name + '',
+                get: ->
+                    @Refresh(_exists)
+                    _exists.value
+                configurable: true
+                enumerable: true
+            @exists = _exists.value
+            
             _parent = {name: 'parent', value: null}
             Object.defineProperty @, '' + _parent.name + '',
                 get: ->
@@ -246,5 +291,10 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 configurable: true
                 enumerable: true
             @parent = _parent.value
+        
+        DeleteSync: () =>
+            _fs.unlinkSync(@fullName)
+            
+            return
 
 return _root[k] = v for k, v of thisNamespaceObjectContainer

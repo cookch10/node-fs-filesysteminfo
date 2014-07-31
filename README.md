@@ -17,7 +17,7 @@ All fsi objects are instantiated with a `path` {String}.  An exception is thrown
 A `path` used to construct the object can be relative or absolute, and the path does not need to exist.  If a relative `path` is used, it will be resolved
 relative to the current `process.cwd()`.
 
-<b>Note</b>:  All fsi object properties and methods currently utilize *synchronous* Node methods only.
+<b>Note</b>:  All fsi object properties and methods currently utilize *synchronous* Node methods.
 
 
 ## Usage
@@ -96,11 +96,12 @@ var fsiObj = new fsi.DirectoryInfo('temp');  //If temp is an existing directory 
 
 ### Methods: DirectoryInfo
 
-| Name                                                             | Type                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-|------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Create([mode])                                                   | void                          | Creates the directory if it does not already exist.  `mode` defaults to `0777`.                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| CreateSubdirectory(path, [mode])                                 | {DirectoryInfo}               | Creates a subdirectory or subdirectories on the specified `path` if it does not exist.  The specified `path` is relative to the current instance.  `mode` defaults to `0777`.<br /><br />An exception is thrown if the `path` length is zero or if `path` is `null` or `undefined`.<br /><br />Returns a new `DirectoryInfo` instance of the deepest subdirectory.                                                                                                                                           |
-| EnumerateFileSystemInfos([fnSearchFilter, searchSubdirectories]) | {Array&lt;FileSystemInfo&gt;} | Returns an {Array} of {DirectoryInfo} and/or {FileInfo} objects comprised of the current directory contents.<br /><br />`fnSearchFilter`:  {Function(`fsname`)} that determines whether the current item in the enumeration is included in the output {Array} if the function evaluates to `true` where `fsname` is the name of the current filesystem item.<br /><br />`searchSubdirectories`: {Boolean} that indicates whether subdirectories will be recursively searched.  The default value is `false`. |
+| Name                                                                 | Type                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|----------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| CreateSync([mode])                                                   | void                          | Creates the directory if it does not already exist.  `mode` defaults to `0777`.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| CreateSubdirectorySync(path, [mode])                                 | {DirectoryInfo}               | Creates a subdirectory or subdirectories on the specified `path` if it does not exist.  The specified `path` is relative to the current instance.  `mode` defaults to `0777`.<br /><br />An exception is thrown if the `path` length is zero or if `path` is `null` or `undefined`.<br /><br />Returns a new `DirectoryInfo` instance of the deepest subdirectory.  If multiple paths are specified (via path separator), and they do not exist, they will be created.  Example: /tmp/test1/test2            |
+| DeleteSync([recursive])                                              | void                          | Permanently deletes the instance directory.  If `recursive` is true, the directory and all its contents are deleted.  If `recursive` is `false` and the directory is not empty, an exception is thrown.  `recursive` defaults to `false`.                                                                                                                                                                                                                                                                    |
+| EnumerateFileSystemInfosSync([fnSearchFilter, searchSubdirectories]) | {Array&lt;FileSystemInfo&gt;} | Returns an {Array} of {DirectoryInfo} and/or {FileInfo} objects comprised of the current directory contents.<br /><br />`fnSearchFilter`:  {Function(`fsname`)} that determines whether the current item in the enumeration is included in the output {Array} if the function evaluates to `true` where `fsname` is the name of the current filesystem item.<br /><br />`searchSubdirectories`: {Boolean} that indicates whether subdirectories will be recursively searched.  The default value is `false`. |
 
 
 ### Remarks: DirectoryInfo
@@ -108,14 +109,14 @@ var fsiObj = new fsi.DirectoryInfo('temp');  //If temp is an existing directory 
 Create a subdirectory from a `DirectoryInfo` instance:
 ```javascript
 var fsiObj = new fsi.DirectoryInfo('currentDir');
-var subDir = fsiObj.CreateSubdirectory('subDir','777'); //Create a subdirectory with readable, writable, and executable permissions
+var subDir = fsiObj.CreateSubdirectorySync('subDir','777'); //Create a subdirectory with readable, writable, and executable permissions
 ```
 
 Enumeration examples:
 ```javascript
 var fsiObj = new fsi.DirectoryInfo('currentDir');
-var directoryContentsArr1 = fsiObj.EnumerateFileSystemInfos('', true); //Return all filesystem objects (recursively including all subdirectories and files)
-var directoryContentsArr2 = fsiObj.EnumerateFileSystemInfos(function (fsname) { return /^\..*$/.test(fsname); }, true); //Return all filesystem objects (recursively including all subdirectories and files) whose name starts with a dot (.)
+var directoryContentsArr1 = fsiObj.EnumerateFileSystemInfosSyncSync('', true); //Return all filesystem objects (recursively including all subdirectories and files)
+var directoryContentsArr2 = fsiObj.EnumerateFileSystemInfosSync(function (fsname) { return /^\..*$/.test(fsname); }, true); //Return all filesystem objects (recursively including all subdirectories and files) whose name starts with a dot (.)
 var pathnamesArr = directoryContentsArr2.map(function (e) { return e.fullName; }); //Generate an array of absolute paths
 ```
 
@@ -142,7 +143,11 @@ var fsiObj = new fsi.FileInfo('temp');  //If temp is an existing file then fsiOb
 
 
 ### Methods: FileInfo
-This is a work in progress (WIP).
+
+| Name                                                                 | Type                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|----------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| DeleteSync()                                                         | void                          | Permanently deletes the instance file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
 
 
 ### Remarks: FileInfo
@@ -158,7 +163,8 @@ This is a work in progress (WIP).
 * Expose Node's path API via fsi.path.
 * Finish stubbing out the FileInfo class.
 * Continue adding functionality.
-
+* Look at adding async methods / patterns.
+* Add a DirectoryInfo.CleanSync() method to remove directory content without removing the directory itself.
 
 ## Contributing
 
