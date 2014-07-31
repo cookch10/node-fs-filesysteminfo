@@ -50,7 +50,7 @@ module.exports = function (grunt) {
                 tasks: ['jshint:test', 'nodeunit']
             },
             coffee_lib: {
-                files: '<%= coffee.lib.cwd %>',
+                files: '<%= coffee.lib.src %>',
                 tasks: ['coffee:lib']
             }
         }
@@ -58,4 +58,5 @@ module.exports = function (grunt) {
 
     // Default task.
     grunt.registerTask('default', ['coffee:lib', 'jshint', 'nodeunit']);
+    grunt.registerTask('wcoffee', ['watch:coffee_lib']);
 };
