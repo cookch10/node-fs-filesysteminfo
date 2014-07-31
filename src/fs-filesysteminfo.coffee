@@ -14,7 +14,7 @@ thisNamespaceObjectContainer = {}
 #region ************* internal lib:  extension methods ********************
 unless String::equals
     String::equals = (str, ignoreCase) ->
-        `ignoreCase = (ignoreCase === undefined ? false : typeof ignoreCase === 'boolean' ? ignoreCase : false)`
+        ignoreCase = if typeof ignoreCase is 'boolean' then ignoreCase else false
         `typeof str === 'string' ? (ignoreCase ? this.toLowerCase() === str.toLowerCase() : this === str) : false`
 #endregion
 #region ************* internal lib:  utility methods   ********************
@@ -206,7 +206,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             return
         
         DeleteSync: (recursive) =>
-            `recursive = (recursive === undefined ? false : typeof recursive === 'boolean' ? recursive : false)`
+            recursive = if typeof recursive is 'boolean' then recursive else false
             if recursive
                 children = @EnumerateFileSystemInfosSync('', false)
                 if (children.length is 0)
