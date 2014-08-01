@@ -21,10 +21,13 @@ unless String::equals
 isFunction = (obj) ->
     typeof obj is 'function'
 
+isBoolean = (obj) ->
+    typeof obj is 'boolean'
+
 isNullOrUndefined = (obj) ->
     typeof obj is 'undefined' or obj is null
 
-toOctalInteger = (obj) ->
+toIntegerFromOctalRepresenation = (obj) ->
     obj ?= ''
     octalInteger = parseInt(obj, 8)
     if isNaN(octalInteger) then null else octalInteger
@@ -187,7 +190,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             @parent = _parent.value
         
         CreateSync: (mode) =>
-            mode = toOctalInteger(mode)
+            mode = toIntegerFromOctalRepresenation(mode)
             
             if not @parent.exists then @parent.CreateSync(mode)
             
@@ -206,7 +209,10 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             return
         
         DeleteSync: (recursive) =>
-            recursive = if typeof recursive is 'boolean' then recursive else false
+            recursive = if isBoolean(recursive) then recursive else false
+            
+            _fs.chmodSync(@fullName, toIntegerFromOctalRepresenation('777'))
+            
             if recursive
                 children = @EnumerateFileSystemInfosSync('', false)
                 if (children.length is 0)
@@ -229,7 +235,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
         CreateSubdirectorySync: (path, mode) =>
             throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
             path = _path.join(@fullName, path)
-            mode = toOctalInteger(mode)
+            mode = toIntegerFromOctalRepresenation(mode)
             subdirectory = new DirectoryInfo(path)
             subdirectory.CreateSync(mode) if not subdirectory.exists
             subdirectory
@@ -292,7 +298,26 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 enumerable: true
             @parent = _parent.value
         
+        CreateSync: (mode) =>
+            mode = toIntegerFromOctalRepresenation(mode)
+            
+            if not @exists
+                success = true
+                
+                try
+                    _fs.writeFileSync(@fullName, '', { encoding: 'utf8', mode: mode, flag: 'wx' }) # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
+                catch ex
+                    success = false
+                finally
+                    if success
+                        @Refresh()
+                    else
+                        throw ex if ex
+            return
+        
         DeleteSync: () =>
+            _fs.chmodSync(@fullName, toIntegerFromOctalRepresenation('777'))
+            
             _fs.unlinkSync(@fullName)
             
             return

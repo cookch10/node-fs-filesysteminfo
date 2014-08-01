@@ -1,6 +1,7 @@
 'use strict';
 
-var fsi = require('../lib/index.js');
+var fsi = require('../lib/index.js'),
+    path = require('path');
 
 /*
   ======== A Handy Little Nodeunit Reference ========
@@ -22,6 +23,13 @@ var fsi = require('../lib/index.js');
     test.ifError(value)
 */
 
+if (!String.prototype.repeat) {
+    String.prototype.repeat = function (num) {
+        num = typeof num === 'number' ? parseInt(num) : 1;
+        return new Array(num + 1).join(this);
+    };
+}
+
 exports.nodeFsFilesysteminfo = {
     setUp: function (done) {
         /* setup here */
@@ -35,7 +43,7 @@ exports.nodeFsFilesysteminfo = {
         done();
     },
     'DirectoryInfo-0.0': function (test) {
-        /* description:  Basic DirectoryInfo construction / property tests */
+        /* description:  Basic DirectoryInfo construction / property tests. */
 
         /* number of assertions */
         test.expect(2);
@@ -51,7 +59,7 @@ exports.nodeFsFilesysteminfo = {
         test.done();
     },
     'DirectoryInfo-0.1': function (test) {
-        /* description: Basic DirectoryInfo CreateSubdirectorySync test */
+        /* description: Basic DirectoryInfo CreateSubdirectorySync() test. */
 
         /* number of assertions */
         test.expect(1);
@@ -66,7 +74,7 @@ exports.nodeFsFilesysteminfo = {
         test.done();
     },
     'DirectoryInfo-0.2': function (test) {
-        /* description:  A more complex DirectoryInfo CreateSubdirectorySync test */
+        /* description:  A more complex DirectoryInfo CreateSubdirectorySync() test. */
 
         /* number of assertions */
         test.expect(1);
@@ -81,7 +89,7 @@ exports.nodeFsFilesysteminfo = {
         test.done();
     },
     'DirectoryInfo-0.3': function (test) {
-        /* description:  A DirectoryInfo DeleteSubdirectorySync test.  Deleting directories recursively */
+        /* description:  A DirectoryInfo DeleteSubdirectorySync() test.  Deleting directories recursively. */
 
         /* number of assertions */
         test.expect(1);
@@ -92,6 +100,39 @@ exports.nodeFsFilesysteminfo = {
 
         /* tests here */
         test.equal(tmpsubdir1.exists, false);
+
+        /* finish here */
+        test.done();
+    },
+    'FileInfo-0.1': function (test) {
+        /* description:  A FileInfo test.  Creating a series of empty files with alternating CreateSync([mode]) overloads for creating read-only and non-read-only files. */
+
+        /* number of assertions */
+        var tmpfileCount = 10;
+        test.expect(tmpfileCount * 2);
+
+        /* setup here */
+        var tmpdir = this.tmpdir;
+        var tmpfilesArr = [];
+        for (var i = 0; i < tmpfileCount; i++) {
+            var tmpfileName = 'x'.repeat(i + 1) + '.tmp.txt';
+
+            var tmpfile = new fsi.FileInfo(path.join(tmpdir.fullName, tmpfileName));
+
+            if (i % 2 === 0) { tmpfile.CreateSync('777'); } else { tmpfile.CreateSync('400'); } // mode 400 is read only mode
+
+            tmpfilesArr.push(tmpfile);
+        }
+
+        /* tests here */
+        tmpfilesArr.forEach(function (finfo) {
+            test.equal(finfo.exists, true);
+        });
+
+        tmpfilesArr.forEach(function (finfo) {
+            finfo.DeleteSync();
+            test.equal(finfo.exists, false);
+        });
 
         /* finish here */
         test.done();
