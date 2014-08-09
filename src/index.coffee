@@ -1,9 +1,9 @@
 ###
- * fs-filesysteminfo
- * https://github.com/cookch10/node-fs-filesysteminfo
+ *  fs-filesysteminfo
+ *  https://github.com/cookch10/node-fs-filesysteminfo
  *
- * Copyright (c) 2014 Christopher M. Cook
- * Licensed under the MIT license.
+ *  Copyright (c) 2014 Christopher M. Cook
+ *  Licensed under the MIT license.
 ###
 
 "use strict"

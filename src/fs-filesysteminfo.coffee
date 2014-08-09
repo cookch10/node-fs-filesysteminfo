@@ -1,8 +1,8 @@
 ###
- * fs-filesysteminfo
- * https://github.com/cookch10/node-fs-filesysteminfo
+ *  fs-filesysteminfo
+ *  https://github.com/cookch10/node-fs-filesysteminfo
  *
- * Copyright (c) 2014 Christopher M. Cook
+ *  Copyright (c) 2014 Christopher M. Cook
  * Licensed under the MIT license.
 ###
 
@@ -18,6 +18,9 @@ unless String::equals
         `typeof str === 'string' ? (ignoreCase ? this.toLowerCase() === str.toLowerCase() : this === str) : false`
 #endregion
 #region ************* internal lib:  utility methods   ********************
+isObject = (obj) ->
+    typeof obj is 'object'
+    
 isFunction = (obj) ->
     typeof obj is 'function'
 
@@ -136,10 +139,10 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 enumerable: true
             @status = _status.value
             
-            init = (=>
+            init = (->
                 @Refresh(_exists) if not _initialized
                 _initialized = true if not _initialized
-            )()
+            ).apply(@)
         
         Refresh: (i) =>
             if i?.value?
@@ -183,11 +186,26 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 get: ->
                     if isNullOrUndefined(_parent.value)
                         parentPath = _path.resolve("#{@fullName}", '..')
-                        _parent.value = new DirectoryInfo(parentPath) 
+                        _parent.value = new DirectoryInfo(parentPath)
                     _parent.value
                 configurable: true
                 enumerable: true
             @parent = _parent.value
+        
+        Create: (mode..., cb) =>
+            mode = toIntegerFromOctalRepresenation(mode)
+            
+            if not @parent.exists then @parent.Create(mode, cb)
+            
+            if not @exists
+                _fs.mkdir @fullName, mode, ((error) ->
+                    if isNullOrUndefined(error) then @Refresh()
+                    
+                    return cb.call(@, error, @) if isFunction(cb)
+                ).bind(@)
+            else
+                return cb.call(@, null, @) if isFunction(cb)
+            return
         
         CreateSync: (mode) =>
             mode = toIntegerFromOctalRepresenation(mode)
@@ -206,7 +224,106 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                         @Refresh()
                     else
                         throw ex if ex
+            return @
+        
+        CreateSubdirectory: (path, mode..., cb) =>
+            throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
+            path = _path.join(@fullName, path)
+            mode = toIntegerFromOctalRepresenation(mode)
+            subdirectory = new DirectoryInfo(path)
+            if not subdirectory.exists
+                subdirectory.Create mode, ((context, error, result) ->
+                    if context is result
+                        return cb.call(this, error, result) if isFunction(cb)
+                    else
+                        return result
+                ).bind(@, subdirectory)
+            else
+                cb(null, subdirectory) if isFunction(cb)
             return
+        
+        CreateSubdirectorySync: (path, mode) =>
+            throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
+            
+            path = _path.join(@fullName, path)
+            
+            mode = toIntegerFromOctalRepresenation(mode)
+            
+            subdirectory = new DirectoryInfo(path)
+            
+            subdirectory.CreateSync(mode) if not subdirectory.exists
+            
+            subdirectory
+        
+        Delete: (recursive = false, cb) =>
+            if arguments.length is 1
+                rArg = Array::slice.call(arguments).slice(-1).shift()
+                
+                if isFunction(rArg)
+                    recursive = false
+                    cb = rArg
+            
+            recursive = if isBoolean(recursive) then recursive else false
+            
+            fnFilter = if recursive then null else -> false
+            
+            self = @
+            
+            fnIterator = ((dir, done) ->
+                context = @
+                
+                results = []
+                
+                context.EnumerateFileSystemInfos({ fnFilter: fnFilter, recursive: recursive }, (error1, list) ->
+                    return done(error1) if error1
+                    
+                    ### 
+                    *   NOTE:
+                    *   A big assumption is being made here in that we assume directories will always appear ahead of files in the array from EnumerateFileSystemInfos().
+                    *   To prevent exceptions from being thrown by attempting to delete a non-empty directory, we are going to reverse() the array before continuing.
+                    *   This means all files will be deleted ahead of their respective parent directories.
+                    *   This also means that all subdirectories will be deleted ahead of their parent directories.
+                    *
+                    *   **If this assumption proves false (possibly for other operating systems), this method logic can be revisited.
+                    *   
+                    *       **Possible alternative logic (just putting here for note purposes)
+                    *       -> One alternative (which I am not sure I like) would be to perform an array.sort(), which might be more expensive resource-wise.
+                    *       -> Another alternative would be to queue directories during iteration to be deleted after all files have been deleted.
+                    *       -> Something better than the previous two.
+                    ###
+                    
+                    list.reverse().push(self)
+                    
+                    i = 0
+                    
+                    (next = ->
+                        fsinfo = list[i++]
+                        
+                        return done.call(self, null) unless fsinfo
+                        
+                        _fs.chmod fsinfo.fullName, toIntegerFromOctalRepresenation('777'), ((error2) ->
+                            return done(error2) if error2
+                            
+                            ftype = @.GetType()
+                            
+                            if ftype is 'FileInfo' or ftype is 'DirectoryInfo'
+                                fsMethod = _fs[if ftype is 'FileInfo' then 'unlink' else 'rmdir']
+                                
+                                fsMethod.call @, @fullName, ((error3) ->
+                                    return done(error3) if error3
+                                    
+                                    return next.call(@)
+                                )
+                            else
+                                return done('Unhandled exception for Delete of ambiguous ' + ftype) # This could happen in some edge cases where I specific file or directory has non-read permissions, but was found to exist by looking at the parent directory contents.
+                        ).bind(fsinfo)
+                    ).call(context)
+                    return
+                )
+                return
+            )
+            
+            fnIterator.call(@, @fullName, cb)
         
         DeleteSync: (recursive) =>
             recursive = if isBoolean(recursive) then recursive else false
@@ -214,7 +331,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             _fs.chmodSync(@fullName, toIntegerFromOctalRepresenation('777'))
             
             if recursive
-                children = @EnumerateFileSystemInfosSync('', false)
+                children = @EnumerateFileSystemInfosSync({ fnFilter: null, recursive: false })
                 if (children.length is 0)
                     _fs.rmdirSync(@fullName)
                 else
@@ -224,28 +341,96 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                         if ftype is 'FileInfo' or ftype is 'DirectoryInfo'
                             fsinfo.DeleteSync(recursive)
                         else
-                            throw 'Unhandled exception for DeleteSync of ' + fsinfo.GetType()
-                    
+                            throw 'Unhandled exception for DeleteSync of ambiguous ' + ftype # This could happen in some edge cases where I specific file or directory has non-read permissions, but was found to exist by looking at the parent directory contents.
                     _fs.rmdirSync(@fullName)
             else
                 _fs.rmdirSync(@fullName) # this will (and should) throw an exception if the directory is not empty.  To delete a non-empty directory, set recursive equal to true.
-            
             return
         
-        CreateSubdirectorySync: (path, mode) =>
-            throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
-            path = _path.join(@fullName, path)
-            mode = toIntegerFromOctalRepresenation(mode)
-            subdirectory = new DirectoryInfo(path)
-            subdirectory.CreateSync(mode) if not subdirectory.exists
-            subdirectory
+        EnumerateFileSystemInfos: (opts = {}, cb) =>
+            if arguments.length is 1 and isFunction(opts)
+                cb = opts
+                opts = {}
+            
+            return cb('Invalid opts argument') if not isObject(opts)
+            
+            defaultfnFilter = -> true
+            
+            opts.fnFilter ?= defaultfnFilter
+            
+            opts.recursive ?= false
+            
+            recursive = if isBoolean(opts.recursive) then opts.recursive else false
+            
+            fnFilter = if isFunction(opts.fnFilter) then opts.fnFilter else defaultfnFilter
+            
+            fileSystemInfosArr = []
+            
+            self = @
+            
+            fnIterator = ((dir, done) ->
+                context = @
+                
+                _fs.readdir dir, ((error, list) ->
+                    return done(error) if error
+                    
+                    i = 0
+                    
+                    (next = ->
+                        fsname = list[i++]
+                        
+                        return done.call(self, null, fileSystemInfosArr) unless fsname
+                        
+                        if fnFilter(fsname)
+                            path = _path.join(context.fullName, fsname)
+                            
+                            fileSystemInfoObj = new exports.FileSystemInfo(path)
+                            
+                            isDirectory = fileSystemInfoObj.flags.isDirectory
+                            
+                            isFile = fileSystemInfoObj.flags.isFile
+                            
+                            if (isDirectory)
+                                fileSystemInfoObj = new DirectoryInfo(path)
+                            
+                            else if (isFile)
+                                fileSystemInfoObj = new exports.FileInfo(path)
+                            
+                            fileSystemInfosArr.push(fileSystemInfoObj)
+                            
+                            if (recursive and isDirectory)
+                                fnIterator.call fileSystemInfoObj, fileSystemInfoObj.fullName, (error, results) ->
+                                    next.call(fileSystemInfoObj)
+                                return
+                            else
+                                next.call(context)
+                        else
+                            next.call(context)
+                    ).call(context)
+                    return
+                ).bind(context)
+                return
+            )
+            
+            fnIterator.call(@, @fullName, cb)
         
-        EnumerateFileSystemInfosSync: (fnSearchFilter, searchSubdirectories) =>
+        EnumerateFileSystemInfosSync: (opts = {}) =>
             throw 'Path does not exist and hence cannot be enumerated' if not @exists
-            searchSubdirectories ?= false
-            if not isFunction(fnSearchFilter) then fnSearchFilter = () -> true
+            
+            throw 'Invalid opts argument' if not isObject(opts)
+            
+            defaultfnFilter = -> true
+            
+            opts.fnFilter ?= defaultfnFilter
+            
+            opts.recursive ?= false
+            
+            recursive = if isBoolean(opts.recursive) then opts.recursive else false
+            
+            fnFilter = if isFunction(opts.fnFilter) then opts.fnFilter else defaultfnFilter
             
             rArg = Array::slice.call(arguments).slice(-1).shift()
+            
             resultsArr = if Array.isArray(rArg) then rArg else []
             
             fileSystemInfosArr = []
@@ -253,20 +438,22 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             _fileSystemInfosArr = _fs.readdirSync(@fullName)
             
             _fileSystemInfosArr.forEach ((fsname) =>
-                if fnSearchFilter(fsname)
+                if fnFilter(fsname)
                     path = _path.join(@fullName, fsname)
                     fileSystemInfoObj = new exports.FileSystemInfo(path)
                     if (fileSystemInfoObj.flags.isDirectory)
                         fileSystemInfoObj = new DirectoryInfo(path)
+                    
                     else if (fileSystemInfoObj.flags.isFile)
                         fileSystemInfoObj = new exports.FileInfo(path)
+                    
                     fileSystemInfosArr.push(fileSystemInfoObj)
             )
             
-            if searchSubdirectories
+            if recursive
                 fileSystemInfosArr.forEach (fsinfo) ->
                     if fsinfo.flags.isDirectory
-                        resultsArr = fsinfo.EnumerateFileSystemInfosSync(fnSearchFilter, searchSubdirectories, resultsArr)
+                        resultsArr = fsinfo.EnumerateFileSystemInfosSync(opts, resultsArr)
                         return
             
             fileSystemInfosArr = fileSystemInfosArr.concat(resultsArr)
@@ -292,34 +479,88 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 get: ->
                     if isNullOrUndefined(_parent.value)
                         parentPath = _path.resolve("#{@fullName}", '..')
-                        _parent.value = new exports.DirectoryInfo(parentPath) 
+                        _parent.value = new exports.DirectoryInfo(parentPath)
                     _parent.value
                 configurable: true
                 enumerable: true
             @parent = _parent.value
         
-        CreateSync: (mode) =>
-            mode = toIntegerFromOctalRepresenation(mode)
+        Create: (opts = {}, cb) =>
+            if arguments.length is 1 and isFunction(opts)
+                cb = opts
+                opts = {}
             
-            if not @exists
-                success = true
-                
-                try
-                    _fs.writeFileSync(@fullName, '', { encoding: 'utf8', mode: mode, flag: 'wx' }) # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
-                catch ex
-                    success = false
-                finally
-                    if success
-                        @Refresh()
-                    else
-                        throw ex if ex
+            return cb('Invalid opts argument') if not isObject(opts)
+            
+            opts.ensure ?= false
+            
+            opts.mode ?= ''
+            
+            opts.overwrite ?= true
+            
+            ensure = if isBoolean(opts.ensure) then opts.ensure else false
+            
+            mode = toIntegerFromOctalRepresenation(opts.mode)
+            
+            overwrite = if isBoolean(opts.overwrite) then opts.overwrite else true
+            
+            writeflag = if overwrite then 'w' else 'wx'
+            
+            fnContinue = ((error) ->
+                _fs.writeFile @fullName, '', { encoding: 'utf8', mode: mode, flag: writeflag }, ((error) -> # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
+                    if isNullOrUndefined(error) then @Refresh()
+                    return cb.call(@, error) if isFunction(cb)
+                ).bind(@)
+            ).bind(@)
+            
+            if ensure and not @parent.exists
+                @parent.Create(mode, cb, fnContinue)
+            else
+                fnContinue()
             return
+        
+        CreateSync: (opts = {}) =>
+            throw 'Invalid opts argument' if not isObject(opts)
+            
+            opts.ensure ?= false
+            
+            opts.mode ?= ''
+            
+            opts.overwrite ?= true
+            
+            ensure = if isBoolean(opts.ensure) then opts.ensure else false
+            
+            mode = toIntegerFromOctalRepresenation(opts.mode)
+            
+            overwrite = if isBoolean(opts.overwrite) then opts.overwrite else true
+            
+            writeflag = if overwrite then 'w' else 'wx'
+            
+            success = true
+            
+            if ensure and not @parent.exists then @parent.CreateSync(mode)
+            
+            try
+                _fs.writeFileSync(@fullName, '', { encoding: 'utf8', mode: mode, flag: writeflag }) # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
+            catch ex
+                success = false
+            finally
+                if success
+                    @Refresh()
+                else
+                    throw ex if ex
+            return @
+        
+        Delete: (cb) =>
+            _fs.chmod @fullName, toIntegerFromOctalRepresenation('777'), ((error) ->
+                _fs.unlink @fullName, ((error) ->
+                    return cb.call(@, error) if isFunction(cb)
+                ).bind(@)
+            ).bind(@)
         
         DeleteSync: () =>
             _fs.chmodSync(@fullName, toIntegerFromOctalRepresenation('777'))
-            
             _fs.unlinkSync(@fullName)
-            
             return
 
 return _root[k] = v for k, v of thisNamespaceObjectContainer
