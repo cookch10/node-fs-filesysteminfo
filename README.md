@@ -7,10 +7,6 @@ The fs-filesysteminfo module, fsi, wraps the native [Node.js](http://nodejs.org)
 
 Install the module with: `npm install fs-filesysteminfo --save`
 
-## NOTE
-
-As of recent, the Travis-CI build status is failing.  This is due to an issue with asynchronous race conditions occurring in the unit tests (tests are passing on the local development environment).  The library itself is functioning properly and the test issue is actively being troubleshooted.
-
 ## Overview
 
 The fs-filesysteminfo NodeJS module, fsi , exposes three classes (objects) for working with the filesystem: `FileSystemInfo`, `DirectoryInfo`, and `FileInfo`.

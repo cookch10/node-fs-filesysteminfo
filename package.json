@@ -1,6 +1,6 @@
 {
   "name": "fs-filesysteminfo",
-  "version": "0.0.11",
+  "version": "1.0.0",
   "main": "./lib/index.js",
   "description": "The fs-filesysteminfo module, fsi, wraps the native NodeJS File System and Path API into a File System Object (FSO) model, which facilitates an object-based approach for working with directories and files.  Inspired by the .NET file system libraries.",
   "homepage": "https://github.com/cookch10/node-fs-filesysteminfo",
