@@ -1,6 +1,6 @@
 {
   "name": "fs-filesysteminfo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "./lib/index.js",
   "description": "The fs-filesysteminfo module, fsi, wraps the native NodeJS File System and Path API into a File System Object (FSO) model, which facilitates an object-based approach for working with directories and files.  Inspired by the .NET file system libraries.",
   "homepage": "https://github.com/cookch10/node-fs-filesysteminfo",
@@ -41,13 +41,14 @@
   ],
   "devDependencies": {
     "async": "^0.9.0",
-    "grunt-contrib-coffee": "^0.10.1",
+    "grunt": "^0.4.5",
+    "grunt-contrib-coffee": "^0.12.0",
     "grunt-contrib-jshint": "^0.10.0",
-    "grunt-contrib-nodeunit": "^0.3.3",
+    "grunt-contrib-nodeunit": "^0.4.1",
     "grunt-contrib-watch": "^0.6.1",
     "jshint-stylish": "^0.2.0",
-    "load-grunt-tasks": "^0.4.0",
-    "time-grunt": "^0.3.1"
+    "load-grunt-tasks": "^2.0.0",
+    "time-grunt": "^1.0.0"
   },
   "dependencies": {},
   "engines": {
