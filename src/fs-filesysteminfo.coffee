@@ -2,13 +2,20 @@
  *  fs-filesysteminfo
  *  https://github.com/cookch10/node-fs-filesysteminfo
  *
- *  Copyright (c) 2014 Christopher M. Cook
- * Licensed under the MIT license.
+ *  Copyright (c) 2015 Christopher M. Cook
+ *  Licensed under the MIT license.
 ###
 
 _root = exports ? this
 _path = require('path')
 _fs = require('fs')
+_exec = require('child_process').exec
+_child = null
+
+oldmask = undefined
+newmask = 0
+oldmask = process.umask(newmask)
+
 thisNamespaceObjectContainer = {}
 
 #region ************* internal lib:  extension methods ********************
@@ -27,13 +34,21 @@ isFunction = (obj) ->
 isBoolean = (obj) ->
     typeof obj is 'boolean'
 
+isString = (obj) ->
+    typeof obj is 'string'
+
 isNullOrUndefined = (obj) ->
     typeof obj is 'undefined' or obj is null
 
 toIntegerFromOctalRepresenation = (obj) ->
     obj ?= ''
-    octalInteger = parseInt(obj, 8)
-    if isNaN(octalInteger) then null else octalInteger
+    integerFromOctal = parseInt(obj, 8)
+    if isNaN(integerFromOctal) then null else integerFromOctal
+
+toOctalStringFromIntegerRepresenation = (obj) ->
+    obj ?= ''
+    octalStringFromInteger = '0' + (obj & parseInt('07777', 8)).toString(8)
+    if octalStringFromInteger is '00' then '' else octalStringFromInteger
 
 namespace = (target, name, block) ->
     objectNamespaceContainer = (if arguments.length is 4 then Array::slice.call(arguments).shift() else null)
@@ -46,10 +61,115 @@ namespace = (target, name, block) ->
 #endregion
 
 namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
+    DEFAULT_FILESYSTEM_CREATION_MODE = '777'
+
     class exports.Base
-        GetType: -> @___typeName___ or @constructor.name
+        getType: -> @___typeName___ or @constructor.name
         toString: ->
-            @GetType().toString()
+            @getType().toString()
+
+    class FileSystemPermissions extends exports.Base
+        constructor: (@octalFileSystemModeString = '') ->
+            CONST_LETTERFORMAT_ARR = ['---', '--x', '-w-', '-wx', 'r--', 'r-x', 'rw-', 'rwx']
+            
+            CONST_BINARYFORMAT_ARR = ['000', '001', '010', '011', '100', '101', '110', '111']
+            
+            fnGetPermissionObj = (intPermissionString) ->
+                intPermission = parseInt(intPermissionString) or 0
+
+                defaultObj = { canRead: false, canWrite: false, canExecute: false, letterFormat: CONST_LETTERFORMAT_ARR[intPermission], binaryFormat: CONST_BINARYFORMAT_ARR[intPermission] }
+                
+                if intPermission
+                    switch intPermission
+                        when 7
+                            defaultObj.canRead = true
+                            defaultObj.canWrite = true
+                            defaultObj.canExecute = true
+                        
+                        when 6
+                            defaultObj.canRead = true
+                            defaultObj.canWrite = true
+                        
+                        when 5
+                            defaultObj.canRead = true
+                            defaultObj.canExecute = true
+                        
+                        when 4
+                            defaultObj.canRead = true
+                        
+                        when 3
+                            defaultObj.canWrite = true
+                            defaultObj.canExecute = true
+                        
+                        when 2
+                            defaultObj.canWrite = true
+                        
+                        when 1
+                            defaultObj.canExecute = true
+                        
+                        else
+                
+                Object.freeze(defaultObj)
+            
+            _owner = {name: 'owner', value: fnGetPermissionObj()}
+            Object.defineProperty @, '' + _owner.name + '',
+                get: ->
+                    _owner.value
+                configurable: true
+                enumerable: true
+            @owner = _owner.value
+            
+            _group = {name: 'group', value: fnGetPermissionObj()}
+            Object.defineProperty @, '' + _group.name + '',
+                get: ->
+                    _group.value
+                configurable: true
+                enumerable: true
+            @group = _group.value
+            
+            _otherUsers = {name: 'otherUsers', value: fnGetPermissionObj()}
+            Object.defineProperty @, '' + _otherUsers.name + '',
+                get: ->
+                    _otherUsers.value
+                configurable: true
+                enumerable: true
+            @otherUsers = _otherUsers.value
+
+            updateRolePermissions = (octalString) ->
+                octalString = if octalString then octalString.toString() else '000'
+                
+                octalString = if octalString.length is 4 then octalString.substring(1) else octalString
+                
+                octalArr = octalString.split('')
+                
+                for octal, i in octalArr
+                    role = if i is 0 then _owner else if i is 1 then _group else _otherUsers
+                    
+                    permission = fnGetPermissionObj(octal)
+                    
+                    role.value = permission
+                
+                octalString
+                
+            _octalFileSystemModeString = {name: 'octalFileSystemModeString', value: @octalFileSystemModeString}
+            Object.defineProperty @, '' + _octalFileSystemModeString.name + '',
+                get: ->
+                    _octalFileSystemModeString.value
+                set: (value) ->
+                    _value = if value and isString(value) and /^(?:0|0?[0-7]{3})$/g.test(value) then value else ''
+                    
+                    updateRolePermissions(_value)
+                    
+                    _octalFileSystemModeString.value = value
+                configurable: true
+                enumerable: true
+            @octalFileSystemModeString = _octalFileSystemModeString.value
+
+        toRoleLetterRepresentationString: ->
+            @owner.letterFormat + @group.letterFormat + @otherUsers.letterFormat
+        
+        toRoleBinaryRepresentationString: ->
+            @owner.binaryFormat + @group.binaryFormat + @otherUsers.binaryFormat
 
     class exports.FileSystemInfo extends exports.Base
         constructor: (@originalPath) ->
@@ -119,10 +239,18 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 enumerable: true
             @flags = _flags.value
             
+            _fileSystemPermissions = {name: 'fileSystemPermissions', value: new FileSystemPermissions()}
+            Object.defineProperty @, '' + _fileSystemPermissions.name + '',
+                get: ->
+                    _fileSystemPermissions.value
+                configurable: true
+                enumerable: true
+            @fileSystemPermissions = _fileSystemPermissions.value
+            
             _exists = {name: 'exists', value: false}
             Object.defineProperty @, '' + _exists.name + '',
                 get: ->
-                    @Refresh(_exists)
+                    @refresh(_exists)
                     _exists.value
                 configurable: true
                 enumerable: true
@@ -140,13 +268,14 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             @status = _status.value
             
             init = (->
-                @Refresh(_exists) if not _initialized
+                @refresh(_exists) if not _initialized
                 _initialized = true if not _initialized
             ).apply(@)
         
-        Refresh: (i) =>
+        refresh: (i) =>
             if i?.value?
                 exists = _fs.existsSync(@fullName)
+                
                 if exists
                     i.value = true
                 else
@@ -159,10 +288,49 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                             i.value = true if parentContentsArr.indexOf(@name) >= 0
                     catch ex0
             try
-                @status = _fs.statSync(@fullName)
-                for k of @flags
-                    kAttrib = @status[k]
-                    @flags[k] = kAttrib.apply(@status) if isFunction(kAttrib)
+                status = @status = _fs.statSync(@fullName)
+                
+                isWin = process.platform is 'win32'
+                
+                isFile = status.isFile()
+                
+                mode = status.mode
+                
+                if isWin then mode = mode | ((mode & 146) >> 1) # workaround for Windows OS permissions issues, see https://github.com/joyent/node/issues/4812 and https://github.com/joyent/node/issues/6381
+                
+                fnContinue = ((error, stdout, stderr) ->
+                    fsPermissions = @fileSystemPermissions
+                    
+                    flags = @flags
+                    
+                    status = @status
+                    
+                    parent = @parent
+                    
+                    parentFSPermissions = parent?.fileSystemPermissions
+                    
+                    parentFSPermissionsOctalFileSystemModeString = if parentFSPermissions then parentFSPermissions.octalFileSystemModeString else ''
+                    
+                    if arguments.length is 3
+                        fsPermissions.octalFileSystemModeString = '0' + stdout.trim() unless error
+                    else
+                        fsPermissions.octalFileSystemModeString = toOctalStringFromIntegerRepresenation(error)
+                    
+                    for k of flags
+                        kAttrib = status[k]
+                        flags[k] = kAttrib.apply(status) if isFunction(kAttrib)
+                    
+                    if parent and not parentFSPermissionsOctalFileSystemModeString
+                        parent.refresh()
+                    
+                    @
+                ).bind(@)
+                
+                if !mode
+                    _child = _exec('stat -c "%a" ' + @parent.fullName, fnContinue)
+                else
+                    fnContinue(mode)
+            
             catch ex1
                 @status = null
             return
@@ -175,7 +343,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             _exists = {name: 'exists', value: false}
             Object.defineProperty @, '' + _exists.name + '',
                 get: ->
-                    @Refresh(_exists)
+                    @refresh(_exists)
                     _exists.value
                 configurable: true
                 enumerable: true
@@ -192,14 +360,12 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 enumerable: true
             @parent = _parent.value
         
-        Create: (mode..., cb) =>
-            mode = toIntegerFromOctalRepresenation(mode)
-            
-            if not @parent.exists then @parent.Create(mode, cb)
+        create: (mode..., cb) =>
+            if not @parent.exists then @parent.create(mode, cb)
             
             if not @exists
-                _fs.mkdir @fullName, mode, ((error) ->
-                    if isNullOrUndefined(error) then @Refresh()
+                _fs.mkdir @fullName, toIntegerFromOctalRepresenation(mode), ((error) ->
+                    if isNullOrUndefined(error) then @refresh()
                     
                     return cb.call(@, error, @) if isFunction(cb)
                 ).bind(@)
@@ -207,55 +373,55 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 return cb.call(@, null, @) if isFunction(cb)
             return
         
-        CreateSync: (mode) =>
-            mode = toIntegerFromOctalRepresenation(mode)
-            
-            if not @parent.exists then @parent.CreateSync(mode)
+        createSync: (mode) =>
+            if not @parent.exists then @parent.createSync(mode)
             
             if not @exists
                 success = true
                 
                 try
-                    _fs.mkdirSync(@fullName, mode)
+                    _fs.mkdirSync(@fullName, toIntegerFromOctalRepresenation(mode))
                 catch ex
                     success = false
                 finally
                     if success
-                        @Refresh()
+                        @refresh()
                     else
                         throw ex if ex
             return @
         
-        CreateSubdirectory: (path, mode..., cb) =>
+        createSubdirectory: (path, mode..., cb) =>
             throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
+            
             path = _path.join(@fullName, path)
-            mode = toIntegerFromOctalRepresenation(mode)
+            
+            mode = if Array.isArray then mode[0] else mode
+            
             subdirectory = new DirectoryInfo(path)
+            
             if not subdirectory.exists
-                subdirectory.Create mode, ((context, error, result) ->
+                subdirectory.create mode, ((context, error, result) ->
                     if context is result
                         return cb.call(this, error, result) if isFunction(cb)
                     else
                         return result
                 ).bind(@, subdirectory)
             else
-                cb(null, subdirectory) if isFunction(cb)
+                cb.call(@, null, subdirectory) if isFunction(cb)
             return
         
-        CreateSubdirectorySync: (path, mode) =>
+        createSubdirectorySync: (path, mode) =>
             throw 'Path is null or undefined' if isNullOrUndefined(path) or path.equals('')
             
             path = _path.join(@fullName, path)
             
-            mode = toIntegerFromOctalRepresenation(mode)
-            
             subdirectory = new DirectoryInfo(path)
             
-            subdirectory.CreateSync(mode) if not subdirectory.exists
+            subdirectory.createSync(mode) if not subdirectory.exists
             
             subdirectory
         
-        Delete: (recursive = false, cb) =>
+        'delete': (recursive = false, cb) =>
             if arguments.length is 1
                 rArg = Array::slice.call(arguments).slice(-1).shift()
                 
@@ -274,12 +440,12 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 
                 results = []
                 
-                context.EnumerateFileSystemInfos({ fnFilter: fnFilter, recursive: recursive }, (error1, list) ->
-                    return done(error1) if error1
+                context.enumerateFileSystemInfos({ fnFilter: fnFilter, recursive: recursive }, (error1, list) ->
+                    return done.call(self, error1) if error1
                     
                     ### 
                     *   NOTE:
-                    *   A big assumption is being made here in that we assume directories will always appear ahead of files in the array from EnumerateFileSystemInfos().
+                    *   A big assumption is being made here in that we assume directories will always appear ahead of files in the array from enumerateFileSystemInfos().
                     *   To prevent exceptions from being thrown by attempting to delete a non-empty directory, we are going to reverse() the array before continuing.
                     *   This means all files will be deleted ahead of their respective parent directories.
                     *   This also means that all subdirectories will be deleted ahead of their parent directories.
@@ -302,20 +468,22 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                         return done.call(self, null) unless fsinfo
                         
                         _fs.chmod fsinfo.fullName, toIntegerFromOctalRepresenation('777'), ((error2) ->
-                            return done(error2) if error2
+                            return done.call(self, error2) if error2
                             
-                            ftype = @.GetType()
+                            ftype = @getType()
+                            
+                            if ftype is 'FileSystemInfo' then @refresh()
                             
                             if ftype is 'FileInfo' or ftype is 'DirectoryInfo'
                                 fsMethod = _fs[if ftype is 'FileInfo' then 'unlink' else 'rmdir']
                                 
                                 fsMethod.call @, @fullName, ((error3) ->
-                                    return done(error3) if error3
+                                    return done.call(self, error3) if error3
                                     
                                     return next.call(@)
                                 )
                             else
-                                return done('Unhandled exception for Delete of ambiguous ' + ftype) # This could happen in some edge cases where I specific file or directory has non-read permissions, but was found to exist by looking at the parent directory contents.
+                                return done('Unhandled exception for delete of ambiguous ' + ftype) # This could happen in some edge cases where I specific file or directory has non-read permissions, but was found to exist by looking at the parent directory contents.
                         ).bind(fsinfo)
                     ).call(context)
                     return
@@ -325,29 +493,31 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             
             fnIterator.call(@, @fullName, cb)
         
-        DeleteSync: (recursive) =>
+        deleteSync: (recursive) =>
             recursive = if isBoolean(recursive) then recursive else false
             
             _fs.chmodSync(@fullName, toIntegerFromOctalRepresenation('777'))
             
             if recursive
-                children = @EnumerateFileSystemInfosSync({ fnFilter: null, recursive: false })
+                children = @enumerateFileSystemInfosSync({ fnFilter: null, recursive: false })
                 if (children.length is 0)
                     _fs.rmdirSync(@fullName)
                 else
                     children.forEach (fsinfo) ->
-                        ftype = fsinfo.GetType()
+                        ftype = fsinfo.getType()
+                        
+                        if ftype is 'FileSystemInfo' then fsinfo.refresh()
                         
                         if ftype is 'FileInfo' or ftype is 'DirectoryInfo'
-                            fsinfo.DeleteSync(recursive)
+                            fsinfo.deleteSync(recursive)
                         else
-                            throw 'Unhandled exception for DeleteSync of ambiguous ' + ftype # This could happen in some edge cases where I specific file or directory has non-read permissions, but was found to exist by looking at the parent directory contents.
+                            throw 'Unhandled exception for deleteSync of ambiguous ' + ftype # This could happen in some edge cases where I specific file or directory has non-read permissions, but was found to exist by looking at the parent directory contents.
                     _fs.rmdirSync(@fullName)
             else
                 _fs.rmdirSync(@fullName) # this will (and should) throw an exception if the directory is not empty.  To delete a non-empty directory, set recursive equal to true.
             return
         
-        EnumerateFileSystemInfos: (opts = {}, cb) =>
+        enumerateFileSystemInfos: (opts = {}, cb) =>
             if arguments.length is 1 and isFunction(opts)
                 cb = opts
                 opts = {}
@@ -372,7 +542,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 context = @
                 
                 _fs.readdir dir, ((error, list) ->
-                    return done(error) if error
+                    return done.call(self, error) if error
                     
                     i = 0
                     
@@ -414,7 +584,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             
             fnIterator.call(@, @fullName, cb)
         
-        EnumerateFileSystemInfosSync: (opts = {}) =>
+        enumerateFileSystemInfosSync: (opts = {}) =>
             throw 'Path does not exist and hence cannot be enumerated' if not @exists
             
             throw 'Invalid opts argument' if not isObject(opts)
@@ -453,7 +623,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             if recursive
                 fileSystemInfosArr.forEach (fsinfo) ->
                     if fsinfo.flags.isDirectory
-                        resultsArr = fsinfo.EnumerateFileSystemInfosSync(opts, resultsArr)
+                        resultsArr = fsinfo.enumerateFileSystemInfosSync(opts, resultsArr)
                         return
             
             fileSystemInfosArr = fileSystemInfosArr.concat(resultsArr)
@@ -468,7 +638,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             _exists = {name: 'exists', value: false}
             Object.defineProperty @, '' + _exists.name + '',
                 get: ->
-                    @Refresh(_exists)
+                    @refresh(_exists)
                     _exists.value
                 configurable: true
                 enumerable: true
@@ -485,7 +655,7 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
                 enumerable: true
             @parent = _parent.value
         
-        Create: (opts = {}, cb) =>
+        create: (opts = {}, cb) =>
             if arguments.length is 1 and isFunction(opts)
                 cb = opts
                 opts = {}
@@ -500,26 +670,40 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             
             ensure = if isBoolean(opts.ensure) then opts.ensure else false
             
-            mode = toIntegerFromOctalRepresenation(opts.mode)
+            mode = opts.mode
+            
+            modeOctal = toIntegerFromOctalRepresenation(mode)
             
             overwrite = if isBoolean(opts.overwrite) then opts.overwrite else true
             
             writeflag = if overwrite then 'w' else 'wx'
             
+            ensureCreateParent = false
+            
             fnContinue = ((error) ->
-                _fs.writeFile @fullName, '', { encoding: 'utf8', mode: mode, flag: writeflag }, ((error) -> # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
-                    if isNullOrUndefined(error) then @Refresh()
-                    return cb.call(@, error) if isFunction(cb)
+                _fs.writeFile @fullName, '', { encoding: 'utf8', mode: modeOctal, flag: writeflag }, ((error) -> # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
+                    if isNullOrUndefined(error) then @refresh()
+                    
+                    if ensureCreateParent
+                        _fs.chmod @parent.fullName, toIntegerFromOctalRepresenation(mode || DEFAULT_FILESYSTEM_CREATION_MODE), ((error) ->
+                            @parent.refresh()
+                            
+                            return cb.call(@, error) if isFunction(cb)
+                        ).bind(@)
+                    else
+                        return cb.call(@, error) if isFunction(cb)
                 ).bind(@)
             ).bind(@)
             
             if ensure and not @parent.exists
-                @parent.Create(mode, cb, fnContinue)
+                ensureCreateParent = true
+                
+                @parent.create('777', cb, fnContinue)
             else
                 fnContinue()
             return
         
-        CreateSync: (opts = {}) =>
+        createSync: (opts = {}) =>
             throw 'Invalid opts argument' if not isObject(opts)
             
             opts.ensure ?= false
@@ -530,37 +714,81 @@ namespace thisNamespaceObjectContainer, 'Util.System.IO', (exports) ->
             
             ensure = if isBoolean(opts.ensure) then opts.ensure else false
             
-            mode = toIntegerFromOctalRepresenation(opts.mode)
+            mode = opts.mode
+            
+            modeOctal = toIntegerFromOctalRepresenation(mode)
             
             overwrite = if isBoolean(opts.overwrite) then opts.overwrite else true
             
             writeflag = if overwrite then 'w' else 'wx'
             
+            ensureCreateParent = false
+            
             success = true
             
-            if ensure and not @parent.exists then @parent.CreateSync(mode)
+            if ensure and not @parent.exists
+                ensureCreateParent = true
+                
+                @parent.createSync('777')
             
             try
-                _fs.writeFileSync(@fullName, '', { encoding: 'utf8', mode: mode, flag: writeflag }) # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
+                _fs.writeFileSync(@fullName, '', { encoding: 'utf8', mode: modeOctal, flag: writeflag }) # note that since the file contains zero bytes, the encoding doesn't actually matter at this point.
             catch ex
                 success = false
             finally
                 if success
-                    @Refresh()
+                    @refresh()
+                    
+                    if ensureCreateParent
+                        _fs.chmodSync(@parent.fullName, toIntegerFromOctalRepresenation(mode || DEFAULT_FILESYSTEM_CREATION_MODE))
+                        
+                        @parent.refresh()
                 else
                     throw ex if ex
             return @
         
-        Delete: (cb) =>
-            _fs.chmod @fullName, toIntegerFromOctalRepresenation('777'), ((error) ->
-                _fs.unlink @fullName, ((error) ->
-                    return cb.call(@, error) if isFunction(cb)
+        'delete': (cb) =>
+            cb = if arguments.length > 1 then arguments[arguments.length - 1] else cb
+
+            parent = @parent
+
+            parentFullName = parent.fullName
+            
+            parentFSPermissions = parent.fileSystemPermissions
+            
+            parentFSPermissionsOctalFileSystemModeString = parentFSPermissions.octalFileSystemModeString or DEFAULT_FILESYSTEM_CREATION_MODE
+            
+            thisFullName = @fullName
+            
+            _fs.chmod parentFullName, toIntegerFromOctalRepresenation('777'), ((error1) ->
+                _fs.chmod thisFullName, toIntegerFromOctalRepresenation('777'), ((error2) ->
+                    _fs.unlink thisFullName, ((error3) ->
+                        _fs.chmod parentFullName, toIntegerFromOctalRepresenation(parentFSPermissionsOctalFileSystemModeString), ((error4) ->
+                            return cb.call(@, error4) if isFunction(cb)
+                        ).bind(@)
+                    ).bind(@)
                 ).bind(@)
             ).bind(@)
         
-        DeleteSync: () =>
-            _fs.chmodSync(@fullName, toIntegerFromOctalRepresenation('777'))
-            _fs.unlinkSync(@fullName)
+        deleteSync: () =>
+            parent = @parent
+
+            parentFullName = parent.fullName
+            
+            parentFSPermissions = parent.fileSystemPermissions
+            
+            parentFSPermissionsOctalFileSystemModeString = parentFSPermissions.octalFileSystemModeString or DEFAULT_FILESYSTEM_CREATION_MODE
+            
+            thisFullName = @fullName
+            
+            _fs.chmodSync(parentFullName, toIntegerFromOctalRepresenation('777'))
+            
+            _fs.chmodSync(thisFullName, toIntegerFromOctalRepresenation('777'))
+            
+            _fs.unlinkSync(thisFullName)
+            
+            _fs.chmodSync(parentFullName, toIntegerFromOctalRepresenation(parentFSPermissionsOctalFileSystemModeString))
+            
             return
 
 return _root[k] = v for k, v of thisNamespaceObjectContainer
