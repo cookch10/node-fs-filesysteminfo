@@ -16,8 +16,6 @@ All fsi objects are instantiated with a `path` {String}.  An exception is thrown
 A `path` used to construct the object can be relative or absolute, and the path does not need to exist.  If a relative `path` is used, it will be resolved
 relative to the current `process.cwd()`.
 
-<b>Note</b>:  This project is currently in a pre-release state, meaning new functionality is being added and also existing functionality may change.  Stay tuned for updates / official release.
-
 
 ## Usage
 ```javascript
@@ -267,5 +265,5 @@ In lieu of a formal styleguide, take care to maintain the existing coding style.
 
 ## License
 
-Copyright (c) 2015 Christopher M. Cook  
+Copyright (c) 2016 Christopher M. Cook  
 Licensed under the MIT license.
